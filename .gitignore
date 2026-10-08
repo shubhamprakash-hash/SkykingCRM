@@ -1,3 +1,8 @@
-frontend/node_modules/
-frontend/dist/
-frontend/.env
+node_modules/
+dist/
+__pycache__/
+*.pyc
+.env
+*.db
+uploads/
+.pytest_cache/

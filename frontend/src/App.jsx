@@ -1,32 +1,37 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
-import Home from './pages/Home'
+import { Routes, Route, Navigate } from 'react-router-dom'
+import { useAuth, isAdmin, isBranch } from './auth'
+import Layout from './components/Layout'
 import Login from './pages/Login'
+import AcceptInvite from './pages/AcceptInvite'
 import Dashboard from './pages/Dashboard'
-import TicketList from './pages/TicketList'
-import TicketDetail from './pages/TicketDetail'
-import Customers from './pages/Customers'
-
-function RequireAuth({ children }) {
-  const user = localStorage.getItem('skyking_user')
-  return user ? children : <Navigate to="/login" />
-}
+import Complaints from './pages/Complaints'
+import NewComplaint from './pages/NewComplaint'
+import ComplaintDetail from './pages/ComplaintDetail'
+import Branches from './pages/Branches'
+import Team from './pages/Team'
+import Helpdesk from './pages/Helpdesk'
+import Settings from './pages/Settings'
 
 export default function App() {
+  const { user } = useAuth()
+  if (user === undefined) return <div className="center muted">Loading…</div>
   return (
-    <BrowserRouter>
-      <Routes>
-        <Route path="/" element={<Home />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/dashboard" element={<RequireAuth><Dashboard /></RequireAuth>} />
-        <Route path="/tickets/available" element={<RequireAuth><TicketList queue="available" /></RequireAuth>} />
-        <Route path="/tickets/mine" element={<RequireAuth><TicketList queue="mine" /></RequireAuth>} />
-        <Route path="/tickets/l1" element={<RequireAuth><TicketList queue="l1" /></RequireAuth>} />
-        <Route path="/tickets/l2" element={<RequireAuth><TicketList queue="l2" /></RequireAuth>} />
-        <Route path="/tickets/l3" element={<RequireAuth><TicketList queue="l3" /></RequireAuth>} />
-        <Route path="/tickets/resolved" element={<RequireAuth><TicketList queue="resolved" /></RequireAuth>} />
-        <Route path="/tickets/:id" element={<RequireAuth><TicketDetail /></RequireAuth>} />
-        <Route path="/customers" element={<RequireAuth><Customers /></RequireAuth>} />
-      </Routes>
-    </BrowserRouter>
+    <Routes>
+      <Route path="/accept-invite" element={<AcceptInvite />} />
+      <Route path="/login" element={user ? <Navigate to="/" /> : <Login />} />
+      {user ? (
+        <Route element={<Layout />}>
+          <Route index element={<Dashboard />} />
+          <Route path="complaints" element={<Complaints />} />
+          <Route path="complaints/new" element={<NewComplaint />} />
+          <Route path="complaints/:id" element={<ComplaintDetail />} />
+          <Route path="helpdesk" element={<Helpdesk />} />
+          {(isAdmin(user)) && <Route path="branches" element={<Branches />} />}
+          {(isAdmin(user) || user.role === 'BRANCH_ADMIN') && <Route path="team" element={<Team />} />}
+          {isAdmin(user) && <Route path="settings" element={<Settings />} />}
+          <Route path="*" element={<Navigate to="/" />} />
+        </Route>
+      ) : <Route path="*" element={<Navigate to="/login" />} />}
+    </Routes>
   )
 }

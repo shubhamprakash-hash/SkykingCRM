@@ -1,0 +1,49 @@
+class Role:
+    SUPER_ADMIN = "SUPER_ADMIN"
+    HO_ADMIN = "HO_ADMIN"
+    L1 = "L1"
+    L2 = "L2"
+    L3 = "L3"
+    REGIONAL_MANAGER = "REGIONAL_MANAGER"
+    BRANCH_ADMIN = "BRANCH_ADMIN"
+    BRANCH_STAFF = "BRANCH_STAFF"
+
+    ALL = [SUPER_ADMIN, HO_ADMIN, L1, L2, L3, REGIONAL_MANAGER, BRANCH_ADMIN, BRANCH_STAFF]
+    ADMIN = {SUPER_ADMIN, HO_ADMIN}
+    HO_LEVEL = {L1, L2, L3}
+    BRANCH = {BRANCH_ADMIN, BRANCH_STAFF}
+    LEVEL_OF = {L1: 1, L2: 2, L3: 3}
+
+
+class S:
+    DRAFT = "DRAFT"
+    L1_QUEUE = "L1_QUEUE"
+    L1_WORKING = "L1_WORKING"
+    L2_QUEUE = "L2_QUEUE"
+    L2_WORKING = "L2_WORKING"
+    ASSIGNED_BRANCH = "ASSIGNED_BRANCH"
+    BRANCH_ACK = "BRANCH_ACK"
+    ACTION_TAKEN = "ACTION_TAKEN"
+    L3_QUEUE = "L3_QUEUE"
+    L3_WORKING = "L3_WORKING"
+    AWAITING_CUSTOMER = "AWAITING_CUSTOMER"
+    AWAITING_BRANCH_INFO = "AWAITING_BRANCH_INFO"
+    RESOLVED = "RESOLVED"
+    CLOSED = "CLOSED"
+
+    ALL = [DRAFT, L1_QUEUE, L1_WORKING, L2_QUEUE, L2_WORKING, ASSIGNED_BRANCH, BRANCH_ACK, ACTION_TAKEN,
+           L3_QUEUE, L3_WORKING, AWAITING_CUSTOMER, AWAITING_BRANCH_INFO, RESOLVED, CLOSED]
+    QUEUE = {1: L1_QUEUE, 2: L2_QUEUE, 3: L3_QUEUE}
+    WORKING = {1: L1_WORKING, 2: L2_WORKING, 3: L3_WORKING}
+    BRANCH_PHASE = {ASSIGNED_BRANCH, BRANCH_ACK, ACTION_TAKEN}
+    LEVEL_OF = {L1_QUEUE: 1, L1_WORKING: 1, L2_QUEUE: 2, L2_WORKING: 2, ASSIGNED_BRANCH: 2, BRANCH_ACK: 2,
+                ACTION_TAKEN: 2, L3_QUEUE: 3, L3_WORKING: 3}
+    PAUSED = {AWAITING_CUSTOMER, AWAITING_BRANCH_INFO}
+    OPEN = set(ALL) - {DRAFT, RESOLVED, CLOSED}
+
+
+PRIORITIES = ["low", "medium", "high", "critical"]
+SOURCES = ["whatsapp", "email", "phone_inbound", "phone_callback", "walk_in", "branch", "other"]
+DEESCALATION_REASONS = ["escalated_too_early", "more_information_needed", "wrong_category_or_branch",
+                        "action_needed_at_lower_level", "decision_taken_needs_execution",
+                        "priority_reduced", "other"]

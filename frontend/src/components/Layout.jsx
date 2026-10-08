@@ -1,58 +1,58 @@
-import { NavLink, useNavigate } from 'react-router-dom'
-import { store } from '../data/store'
+import { useState } from 'react'
+import { NavLink, Outlet, Link } from 'react-router-dom'
+import { useAuth, isAdmin, isBranch } from '../auth'
+import { api } from '../api'
+import { ROLES, fmt, useInterval, useLoad } from '../util'
 
-const items = [
-  { to: '/dashboard', label: 'Dashboard' },
-  { to: '/tickets/available', label: 'Available Tickets' },
-  { to: '/tickets/mine', label: 'My Tickets' },
-  { to: '/tickets/l1', label: 'L1 Escalations' },
-  { to: '/tickets/l2', label: 'L2 Escalations' },
-  { to: '/tickets/l3', label: 'L3 Escalations' },
-  { to: '/tickets/resolved', label: 'Resolved' },
-  { to: '/customers', label: 'Customers' },
-]
-
-export default function Layout({ children }) {
-  const navigate = useNavigate()
-  const user = JSON.parse(localStorage.getItem('skyking_user') || 'null')
-
-  const logout = () => {
-    localStorage.removeItem('skyking_user')
-    navigate('/login')
-  }
-
-  const resetData = () => {
-    if (confirm('Reset all demo tickets back to their original state? This clears anything picked/escalated/resolved in this browser.')) {
-      store.resetDemoData()
-      window.location.reload()
-    }
-  }
-
+function Bell() {
+  const [open, setOpen] = useState(false)
+  const { data, reload } = useLoad(() => api('/notifications'), [])
+  useInterval(reload, 30000)
+  const unread = data?.unread || 0
+  const toggle = async () => { setOpen(o => !o); if (!open && unread) { await api('/notifications/read', { method: 'POST' }); setTimeout(reload, 500) } }
   return (
-    <div style={{ display: 'flex', minHeight: '100vh' }}>
-      <div style={{ width: 220, background: '#111827', color: '#fff', padding: '20px 0', flexShrink: 0 }}>
-        <div style={{ padding: '0 20px 20px', fontWeight: 700, fontSize: 18, color: '#60a5fa' }}>SkyKing CRM</div>
-        {items.map(i => (
-          <NavLink key={i.to} to={i.to}
-            style={({ isActive }) => ({
-              display: 'block', padding: '10px 20px', color: isActive ? '#fff' : '#9ca3af',
-              background: isActive ? '#1f2937' : 'transparent', textDecoration: 'none', fontSize: 14,
-            })}>
-            {i.label}
-          </NavLink>
-        ))}
-        <div style={{ padding: '20px 20px 0', marginTop: 20, borderTop: '1px solid #374151' }}>
-          <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 2 }}>{user?.name}</div>
-          <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 8, textTransform: 'uppercase' }}>Role: {user?.role || 'unknown'}</div>
-          <button onClick={logout} style={{ background: 'none', border: '1px solid #374151', color: '#9ca3af', padding: '6px 12px', borderRadius: 4, cursor: 'pointer', marginRight: 8, marginBottom: 8 }}>
-            Log out
-          </button>
-          <button onClick={resetData} style={{ display: 'block', background: 'none', border: '1px solid #374151', color: '#6b7280', padding: '6px 12px', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
-            Reset demo data
-          </button>
+    <div className="bell">
+      <button className="btn ghost" onClick={toggle} aria-label="Notifications">🔔{unread > 0 && <b className="count">{unread}</b>}</button>
+      {open && (
+        <div className="drop">
+          {(data?.items || []).length === 0 && <div className="muted pad">No notifications</div>}
+          {(data?.items || []).map(n => (
+            <Link key={n.id} to={n.ticket_id ? `/complaints/${n.ticket_id}` : '/'} onClick={() => setOpen(false)} className={'note ' + (n.read ? '' : 'new')}>
+              <div>{n.text}</div><small className="muted">{fmt(n.at)}</small>
+            </Link>
+          ))}
         </div>
-      </div>
-      <div style={{ flex: 1, padding: 24 }}>{children}</div>
+      )}
+    </div>
+  )
+}
+
+export default function Layout() {
+  const { user, logout } = useAuth()
+  const b = isBranch(user)
+  return (
+    <div className="shell">
+      <aside className="side">
+        <div className="brand">✈ Skyking<small>Complaint CRM</small></div>
+        <nav>
+          <NavLink to="/" end>Dashboard</NavLink>
+          <NavLink to="/complaints">Complaints</NavLink>
+          <NavLink to="/complaints/new">+ New complaint</NavLink>
+          <NavLink to="/helpdesk">{b ? 'Head Office desk' : 'Branch help desk'}</NavLink>
+          {(isAdmin(user) || user.role === 'BRANCH_ADMIN') && <NavLink to="/team">Team & invitations</NavLink>}
+          {isAdmin(user) && <NavLink to="/branches">Branches</NavLink>}
+          {isAdmin(user) && <NavLink to="/settings">Rules & SLA</NavLink>}
+        </nav>
+        <div className="me">
+          <div><b>{user.name}</b></div>
+          <small>{ROLES[user.role]}{user.branch ? ' · ' + user.branch : ''}</small>
+          <button className="btn ghost" onClick={logout}>Sign out</button>
+        </div>
+      </aside>
+      <main className="main">
+        <header className="top"><div className="muted">Times shown in IST</div><Bell /></header>
+        <Outlet />
+      </main>
     </div>
   )
 }
