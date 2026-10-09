@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { NavLink, Outlet, Link } from 'react-router-dom'
 import { useAuth, isAdmin, isBranch } from '../auth'
-import { api } from '../api'
+import { api, DEMO } from '../api'
+import { advance, resetDemo, demoClock, demoAccounts, DEMO_PASSWORD } from '../demo/engine'
 import { ROLES, fmt, useInterval, useLoad } from '../util'
 
 function Bell() {
@@ -23,6 +24,25 @@ function Bell() {
           ))}
         </div>
       )}
+    </div>
+  )
+}
+
+function DemoBar() {
+  const { user, login } = useAuth()
+  const go = fn => { fn(); location.reload() }
+  const switchTo = async email => { await login(email, DEMO_PASSWORD); location.reload() }
+  return (
+    <div className="demobar">
+      <b>PROTOTYPE DEMO</b><span>sample data · runs in your browser</span>
+      <span className="grow" />
+      <span title="Demo clock (IST)">🕒 {fmt(new Date(demoClock()).toISOString())}</span>
+      <button className="btn" onClick={() => go(() => advance(60, true))}>+1 working hour</button>
+      <button className="btn warn" onClick={() => go(() => advance(360, true))}>+6 working hours</button>
+      <button className="btn" onClick={() => go(() => advance(1440))}>+1 day</button>
+      <select value={user.email} onChange={e => switchTo(e.target.value)} title="Switch user">
+        {demoAccounts().map(a => <option key={a.email} value={a.email}>{a.name} ({ROLES[a.role]})</option>)}</select>
+      <button className="btn" onClick={() => window.confirm('Reset all demo data?') && go(resetDemo)}>Reset</button>
     </div>
   )
 }
@@ -50,6 +70,7 @@ export default function Layout() {
         </div>
       </aside>
       <main className="main">
+        {DEMO && <DemoBar />}
         <header className="top"><div className="muted">Times shown in IST</div><Bell /></header>
         <Outlet />
       </main>

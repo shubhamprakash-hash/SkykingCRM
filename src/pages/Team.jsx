@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { api } from '../api'
+import { api, linkBase } from '../api'
 import { useAuth, isAdmin } from '../auth'
 import { ROLES, fmt, useLoad, Msg } from '../util'
 
@@ -14,9 +14,9 @@ export default function Team() {
   const invite = async e => {
     e.preventDefault(); setErr(''); setLink('')
     try { const r = await api('/invitations', { method: 'POST', body: { ...f, branch_id: f.branch_id ? +f.branch_id : null, mobile: f.mobile || null, email: f.email || null } })
-      setLink(location.origin + r.invite_link + (r.status === 'awaiting_approval' ? '   (works after Head Office approves)' : '')); setF({ ...f, name: '', mobile: '', email: '' }); invs.reload() } catch (x) { setErr(x.message) }
+      setLink(linkBase() + r.invite_link + (r.status === 'awaiting_approval' ? '   (works after Head Office approves)' : '')); setF({ ...f, name: '', mobile: '', email: '' }); invs.reload() } catch (x) { setErr(x.message) }
   }
-  const call = async (path, method = 'POST', body) => { setErr(''); try { const r = await api(path, { method, body }); if (r.reset_link) setLink(location.origin + r.reset_link); users.reload(); invs.reload() } catch (x) { setErr(x.message) } }
+  const call = async (path, method = 'POST', body) => { setErr(''); try { const r = await api(path, { method, body }); if (r.reset_link) setLink(linkBase() + r.reset_link); users.reload(); invs.reload() } catch (x) { setErr(x.message) } }
   return (
     <div>
       <h1>Team & invitations</h1>
