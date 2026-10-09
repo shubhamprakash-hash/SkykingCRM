@@ -10,7 +10,7 @@ const REASONS = { escalated_too_early: 'Escalated too early', more_information_n
 // action -> label, tone, simple (no form), and form fields. The buttons shown come from the server (ticket.actions).
 const ACTIONS = {
   pick: { label: 'Pick up', tone: 'primary', simple: true }, release: { label: 'Release to queue', simple: true },
-  escalate: { label: 'Escalate', tone: 'warn', fields: [['reason', 'Why are you escalating?', 'text']] },
+  escalate: { label: 'Escalate', tone: 'warn' }, assign_owner: { label: 'Assign to person' },
   deescalate: { label: 'Send back', tone: 'warn' },
   assign_branch: { label: 'Assign to branch', tone: 'primary' },
   extend_deadline: { label: 'Extend branch deadline', fields: [['minutes', 'Extra minutes (30–1440)', 'number'], ['reason', 'Reason', 'text']] },
@@ -126,7 +126,7 @@ function ActionModal({ action, t, user, onClose, onRun, error }) {
   const set = (k, x) => setV(s => ({ ...s, [k]: x }))
   const { data: branches } = useLoad(() => action === 'assign_branch' ? api('/branches') : Promise.resolve([]), [action])
   const { data: sugg } = useLoad(() => action === 'assign_branch' && t.pincode ? api('/tickets/suggest-branch?pincode=' + t.pincode) : Promise.resolve([]), [action])
-  const { data: dir } = useLoad(() => ['deescalate', 'branch_distribute'].includes(action) ? api('/users/directory' + (action === 'deescalate' ? `?level=${(t.level || 2) - 1}` : '')) : Promise.resolve([]), [action])
+  const { data: dir } = useLoad(() => ['deescalate', 'branch_distribute', 'escalate', 'assign_owner'].includes(action) ? api('/users/directory' + ({ deescalate: `?level=${(t.level || 2) - 1}`, escalate: `?level=${(t.level || 1) + 1}`, assign_owner: `?level=${t.level}` }[action] || '')) : Promise.resolve([]), [action])
   const fieldsFor = {
     update_details: [['address', 'Address', 'text', t.address], ['pincode', 'Pincode', 'text', t.pincode], ['consignment_no', 'Consignment number', 'text', t.consignment_no],
       ['receiver_name', 'Receiver name', 'text', t.receiver_name], ['receiver_mobile', 'Receiver mobile', 'text', t.receiver_mobile]],
@@ -137,6 +137,8 @@ function ActionModal({ action, t, user, onClose, onRun, error }) {
     if (action === 'assign_branch') { p = { branch_id: +v.branch_id, deadline_minutes: +(v.deadline || 360), assignee_id: null } }
     if (action === 'deescalate') { p = { reason_code: v.reason_code, note: v.note, target_user_id: v.target ? +v.target : null, withdraw_branch: v.withdraw === undefined ? null : v.withdraw === 'yes', skip: !!v.skip } }
     if (action === 'branch_distribute') p = { assignee_id: +v.assignee_id }
+    if (action === 'escalate') p = { reason: v.reason, target_user_id: v.target ? +v.target : null }
+    if (action === 'assign_owner') p = { user_id: +v.user_id }
     if (action === 'verify') p = { approve: v.approve === 'yes', note: v.note, action_taken: v.action_taken, outcome: v.outcome }
     if (action === 'extend_deadline') p.minutes = +v.minutes
     if (action === 'merge') { api('/tickets?q=' + encodeURIComponent(v.number || '')).then(r => { const hit = r.items.find(i => i.number === (v.number || '').trim().toUpperCase()); if (!hit) return alert('Complaint number not found'); onRun('merge', { into_id: hit.id }) }); return }
@@ -164,6 +166,11 @@ function ActionModal({ action, t, user, onClose, onRun, error }) {
           {hasBranch && <label>The branch assignment will…<select required value={v.withdraw || ''} onChange={e => set('withdraw', e.target.value)}><option value="">Choose…</option><option value="yes">be withdrawn (branch chat becomes read-only)</option><option value="no">stay with the branch</option></select></label>}
           {isAdmin(user) && t.level === 3 && <label className="check"><input type="checkbox" onChange={e => set('skip', e.target.checked)} /> Admin: skip L2 and send to L1</label>}
           <small className="muted">The next level gets a fresh time limit. The complaint cannot be escalated again until they log an action.</small></>}
+        {action === 'escalate' && <>
+          <label>Why are you escalating?<input required onChange={e => set('reason', e.target.value)} /></label>
+          <label>Send to a specific person at L{(t.level || 1) + 1} (optional)<select value={v.target || ''} onChange={e => set('target', e.target.value)}><option value="">Next level queue</option>{(dir || []).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></label>
+          <small className="muted">The complaint also escalates automatically if nobody acts within the time limit.</small></>}
+        {action === 'assign_owner' && <label>Assign to (L{t.level})<select required value={v.user_id || ''} onChange={e => set('user_id', e.target.value)}><option value="">Choose…</option>{(dir || []).map(u => <option key={u.id} value={u.id}>{u.name}{u.id === t.owner_id ? ' (current)' : ''}</option>)}</select></label>}
         {action === 'branch_distribute' && <label>Staff member<select required onChange={e => set('assignee_id', e.target.value)}><option value="">Choose…</option>{(dir || []).map(u => <option key={u.id} value={u.id}>{u.name}</option>)}</select></label>}
         {action === 'verify' && <>
           <label>Decision<select required onChange={e => set('approve', e.target.value)}><option value="">Choose…</option><option value="yes">Approve and resolve</option><option value="no">Send back to branch</option></select></label>

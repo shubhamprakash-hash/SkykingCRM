@@ -188,7 +188,19 @@ def('pick', (t, u) => { chk(Object.values(QUEUE).includes(t.status) && !t.owner_
 def('release', (t, u) => { chk(Object.values(WORKING).includes(t.status), 'Complaint is not being worked'); chk(t.owner_id === u.id || isAdmin(u) || (u.is_team_lead && lvlOf(u) === t.level), 'Only the owner can release') },
   (t, u, p, now) => { transition(t, u, 'released', QUEUE[t.level], now, { owner: null }) })
 def('escalate', (t, u) => { chk(!isBranch(u) && [1, 2].includes(t.level), 'Only L1 and L2 can escalate'); chk([...qOrW(t.level), ...(t.level === 2 ? BRANCH_PHASE : [])].includes(t.status), 'Cannot escalate from this status'); chk(isAdmin(u) || lvlOf(u) === t.level, 'Only the current level can escalate'); chk(!t.cooling || isAdmin(u), 'This complaint was just sent back: log an action before escalating it again') },
-  (t, u, p, now) => { const reason = text(p.reason, 'Reason', 3), f = t.level; transition(t, u, 'escalated', QUEUE[f + 1], now, { owner: null, trigger: f === 2 ? 'l2_direct' : 'manual', reason }); t.escalation_count++; t.cooling = false; toLevel(f + 1, `${t.number} escalated to L${f + 1}: ${reason}`, t, 'escalation') })
+  (t, u, p, now) => {
+    const reason = text(p.reason, 'Reason', 3), f = t.level, tg = p.target_user_id ? user(+p.target_user_id) : null
+    if (p.target_user_id && (!tg || tg.status !== 'active' || lvlOf(tg) !== f + 1)) bad(`Choose an active L${f + 1} user`)
+    transition(t, u, 'escalated', QUEUE[f + 1], now, { owner: null, trigger: f === 2 ? 'l2_direct' : 'manual', reason }); t.escalation_count++; t.cooling = false; toLevel(f + 1, `${t.number} escalated to L${f + 1}: ${reason}`, t, 'escalation')
+    if (tg) { transition(t, u, 'assigned_owner', WORKING[f + 1], now, { owner: tg.id, note: `Assigned to ${tg.name} on escalation` }); rememberOwner(t, f + 1, tg.id); notify([tg.id], `${t.number} escalated to you: ${reason}`, t, 'assignment') }
+  })
+def('assign_owner', (t, u) => { chk(!isBranch(u) && (isAdmin(u) || (u.is_team_lead && lvlOf(u) === t.level)), 'Only Admin or the team lead of this level can assign a complaint to a person'); chk([1, 2, 3].includes(t.level) && ([QUEUE[t.level], WORKING[t.level]].includes(t.status) || BRANCH_PHASE.includes(t.status)), 'Complaint cannot be assigned in this status') },
+  (t, u, p, now) => {
+    A.assign_owner.pre(t, u); const tu = user(+p.user_id); if (!tu || tu.status !== 'active' || lvlOf(tu) !== t.level) bad(`Choose an active L${t.level} user`)
+    if (t.status === QUEUE[t.level]) transition(t, u, 'assigned_owner', WORKING[t.level], now, { owner: tu.id, note: `Assigned to ${tu.name}` })
+    else { const old = t.owner_id; t.owner_id = tu.id; log(t, 'assigned_owner', u, { from: [t.status, t.level], note: `Assigned to ${tu.name}`, meta: { from: old } }, now); t.version++ }
+    rememberOwner(t, t.level, tu.id); notify([tu.id], `${t.number} assigned to you`, t, 'assignment')
+  })
 def('deescalate', (t, u) => { chk(!isBranch(u) && [2, 3].includes(t.level), 'Only L2 and L3 can send a complaint back'); chk(OPEN.includes(t.status) && !PAUSED.includes(t.status), 'Cannot be sent back in this status'); chk(isAdmin(u) || lvlOf(u) === t.level, 'Only the current level can send it back') },
   (t, u, p, now) => {
     const c = DB.rules
@@ -205,14 +217,15 @@ def('deescalate', (t, u) => { chk(!isBranch(u) && [2, 3].includes(t.level), 'Onl
     t.deescalation_count++; t.cooling = true; if (owner) rememberOwner(t, target, owner)
     const msg = `${t.number} sent back to L${target} from L${f}: ${note.slice(0, 120)}`; toLevel(target, msg, t, 'deescalation', true); notify([owner], msg, t, 'deescalation')
   })
-def('assign_branch', (t, u) => { chk(!isBranch(u) && (isAdmin(u) || lvlOf(u) === 2), 'Only L2 can assign to a branch'); chk(t.level === 2 && [S.L2Q, S.L2W, S.AB, S.BA].includes(t.status), 'Complaint is not at L2') },
+def('assign_branch', (t, u) => { chk(!isBranch(u) && (isAdmin(u) || lvlOf(u) === 2), 'Only L2 or Admin can assign to a branch'); if (isAdmin(u)) chk([...Object.values(QUEUE), ...Object.values(WORKING), S.AB, S.BA].includes(t.status), 'Cannot be assigned to a branch in this status'); else chk(t.level === 2 && [S.L2Q, S.L2W, S.AB, S.BA].includes(t.status), 'Complaint is not at L2') },
   (t, u, p, now) => {
     const c = DB.rules, br = branchOf(+p.branch_id); if (!br) throw new Err('Branch not found', 404); if (br.status !== 'live') bad('Branch is not live')
     if (incomplete(t)) bad('Complete the consignment number and pincode before assigning to a branch')
     const dl = p.deadline_minutes || c.branch_deadline_default; if (dl < c.branch_deadline_min || dl > c.branch_deadline_max) bad(`Deadline must be between ${c.branch_deadline_min} and ${c.branch_deadline_max} minutes`)
     const old = t.branch_id; t.branch_id = br.id; t.branch_assignee_id = p.assignee_id || null; t.branch_deadline_minutes = dl; t.extension_count = 0
     t.tb = [...new Set([...(t.tb || []), br.id])]
-    transition(t, u, 'assigned_branch', S.AB, now, { owner: t.owner_id || (lvlOf(u) === 2 ? u.id : null), meta: { branch: br.code, deadline_minutes: dl, reassigned_from: old } }); t.cooling = false
+    const forced = isAdmin(u) && t.level !== 2
+    transition(t, u, 'assigned_branch', S.AB, now, { owner: forced ? null : (t.owner_id || (lvlOf(u) === 2 ? u.id : null)), trigger: forced ? 'admin_force' : 'manual', via: forced ? 'admin_force' : undefined, meta: { branch: br.code, deadline_minutes: dl, reassigned_from: old, admin_move: forced } }); t.cooling = false
     toBranch(br.id, `${t.number} assigned to ${br.name}. Deadline: ${Math.floor(dl / 60)}h ${dl % 60}m`, t, 'assignment'); if (old && old !== br.id) toBranch(old, `${t.number} was moved to another branch`, t)
   })
 def('extend_deadline', (t, u) => { chk(!isBranch(u) && (isAdmin(u) || lvlOf(u) === 2), 'Only L2 can extend a branch deadline'); chk([S.AB, S.BA].includes(t.status) && t.due_at, 'No branch deadline to extend'); chk(t.due_at > T(), 'The deadline has already passed') },
